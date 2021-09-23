@@ -1,0 +1,8 @@
+1-  Metadata: are store at the beginning of the memory block 
+2- No, We just have to keep aa list of the free blocks
+3- the address of the beginning of the memory block (where is data will be stored)
+4-the address which we gived him
+5- Verify if there is some adjacent free block  to the block we want to liberate.
+6- a new free block
+7-
+8- free block 3

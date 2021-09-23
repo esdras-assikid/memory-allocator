@@ -26,6 +26,19 @@ mem_free_block_t *first_free;
 /* TODO: code specific to the FIRST FIT allocation policy can be
  * inserted here */
 
+void* mem_alloc_mod(size_t size){
+    
+    mem_free_block_t *block = first_free;
+
+    while(block != NULL){
+        if(block->size >= size){
+            return block;
+        }
+        block = block->next;
+
+    }
+}
+
 /* You can define here functions that will be compiled only if the
  * symbol FIRST_FIT is defined, that is, only if the selected policy
  * is FF */
