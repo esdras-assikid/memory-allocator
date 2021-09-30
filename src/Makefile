@@ -6,11 +6,11 @@ PEDANTIC_PARANOID_FREAK =       -g -O0 -Wall -Wshadow -Wcast-align \
 				-Wpointer-arith -Wwrite-strings -finline-functions -Werror
 REASONABLY_CAREFUL_DUDE =	-Wall
 NO_PRAYER_FOR_THE_WICKED =	-w
-WARNINGS = 			$(REASONABLY_CAREFUL_DUDE)
+WARNINGS = 			$(PEDANTIC_PARANOID_FREAK)
 
 
 CFLAGS =   -g  $(WARNINGS)
-LDFLAGS= 
+LDFLAGS=
 
 # defines the set of configuration variables for the Makefile
 include Makefile.config
@@ -28,7 +28,7 @@ CONFIG_FLAGS += -DFIRST_FIT
 else ifeq ($(ALLOC_POLICY), NF)
 $(info Using Next Fit policy)
 CONFIG_FLAGS += -DNEXT_FIT
-else 
+else
 $(error ERROR: using unknown value for ALLOC_POLICY)
 endif
 
@@ -136,7 +136,7 @@ clean:
 
 mem_shell_sim: bin/mem_shell_sim
 
-bin/mem_shell_sim: mem_shell_sim.o mem_alloc_sim.o lib/libsim.so 
+bin/mem_shell_sim: mem_shell_sim.o mem_alloc_sim.o lib/libsim.so
 	$(CC) $(CONFIG_FLAGS) $(CFLAGS) $(LDFLAGS) -L./lib  mem_shell_sim.o mem_alloc_sim.o -o $@ -lsim
 
 mem_shell_sim.o: mem_shell_sim.c mem_alloc_types.h
@@ -151,4 +151,3 @@ html: $(HTML_TARGETS)
 
 %.html: %.md
 	pandoc $< -s -o $@
-
