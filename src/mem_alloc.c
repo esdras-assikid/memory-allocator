@@ -28,19 +28,38 @@ void *memory_alloc_policy(size_t size)
 {
 
     mem_free_block_t *previous, *current;
+    size_t remaining_space;
 
     current = first_free;
-    previous = current;
-    while (current != NULL) { // Traversing the free list
-        if (current->size > size) { // If a larger than necessary block is found
-            if (current->size - size - FBLOCK_SIZE < FBLOCK_SIZE)
-                return NULL;
-            mem_free_block_t *new_free_block; // We create a new free block
-            // This block is located at
-            new_free_block = (mem_free_block_t *) ((char *) current + (ABLOCK_SIZE + size));
-            new_free_block->size = current->size - size - FBLOCK_SIZE;
+    previous = NULL;
+    while (current != NULL) {
+        /*
+            If the remaining space after the allocation is less than the size
+            of the free block header, we look for another block in the free
+            list.
+        */
+        remaining_space = (FBLOCK_SIZE + current->size) - (ABLOCK_SIZE + size);
+        if (current->size + ABLOCK_SIZE > size) {
+            if (remaining_space < FBLOCK_SIZE) {
+                if (previous == NULL)
+                    first_free = current->next;
+                else
+                    previous->next = current->next;
+                return (void *) current;
+            }
+
+            mem_free_block_t *new_free_block;
+            /*
+                The newly allocated block has the following structure,
+                [size; 0, 1, 2, ..., size -2, size - 1]
+                so the address of the new free block is located at address
+                sizeof(size) + size.
+            */
+            new_free_block =
+                (mem_free_block_t *) ((char *) current + (ABLOCK_SIZE + size));
+            new_free_block->size = remaining_space - FBLOCK_SIZE;
             new_free_block->next = current->next;
-            if (current->next == NULL)
+            if (previous == NULL)
                 first_free = new_free_block;
             else {
                 previous->next = new_free_block;
@@ -49,8 +68,8 @@ void *memory_alloc_policy(size_t size)
             return (void *) current;
         }
         if (current->size == size) {
-            if (current->next == NULL)
-                first_free = NULL;
+            if (previous == NULL)
+                first_free = current->next;
             else
                 previous->next = current->next;
             return (void *) current;
@@ -113,10 +132,25 @@ void *memory_alloc(size_t size)
 
 }
 
+static void coalescing_previous(mem_free_block_t *prev, mem_free_block_t *freed,
+    char *end_prev, char *begin_freed)
+{
+
+    if (prev == NULL) {
+        first_free = freed;
+    } else if (end_prev < begin_freed) {
+        prev->next = freed;
+    } else if (end_prev == begin_freed) {
+        prev->size += (FBLOCK_SIZE + freed->size);
+        prev->next = freed->next;
+        freed = NULL;
+    }
+
+}
+
 void memory_free(void *p)
 {
 
-    /* TODO: insert your code here */
     size_t size;
     char *begin_address, *end_address, *end_previous_free;
     mem_free_block_t *freed_block, *current_free, *previous_free;
@@ -129,30 +163,29 @@ void memory_free(void *p)
     freed_block->size = (ABLOCK_SIZE + size) - FBLOCK_SIZE;
 
     current_free = first_free;
-    previous_free = current_free;
+    previous_free = NULL;
     while (current_free != NULL) {
-        // end_current_free = (char *) current_free + (FBLOCK_SIZE + current_free->size);
-        end_previous_free = (char *) previous_free + (FBLOCK_SIZE + previous_free->size);
+        if (previous_free != NULL)
+            end_previous_free =
+                (char *) previous_free + (FBLOCK_SIZE + previous_free->size);
+        else
+            end_previous_free =
+                (char *) first_free + (FBLOCK_SIZE + first_free->size);
+
         if (end_address < (char *) current_free) {
             freed_block->next = current_free;
-            if (previous_free != current_free)
-                previous_free->next = freed_block;
-            if (end_previous_free == begin_address)
-                previous_free->size += (FBLOCK_SIZE + freed_block->size);
-            if (current_free == first_free)
-                first_free = freed_block;
+            coalescing_previous(previous_free, freed_block,
+                end_previous_free, begin_address);
             break;
         } else if (end_address == (char *) current_free) {
-            freed_block->next = current_free;
             freed_block->size += (FBLOCK_SIZE + current_free->size);
-            if (previous_free != current_free)
-                previous_free->next = freed_block;
-            if (end_previous_free == begin_address)
-                previous_free->size += (FBLOCK_SIZE + freed_block->size);
-            if (current_free == first_free)
-                first_free = freed_block;
+            freed_block->next = current_free->next;
+            current_free = NULL;
+            coalescing_previous(previous_free, freed_block,
+                end_previous_free, begin_address);
             break;
         }
+
         previous_free = current_free;
         current_free = current_free->next;
     }
