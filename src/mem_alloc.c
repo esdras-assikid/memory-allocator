@@ -156,7 +156,7 @@ void memory_free(void *p)
     mem_free_block_t *freed_block, *current_free, *previous_free;
 
     begin_address = (char *) p - ABLOCK_SIZE;
-    size = *(size_t *) begin_address;
+    size = memory_get_allocated_block_size(p);
     end_address = begin_address + ABLOCK_SIZE + size;
 
     freed_block = (mem_free_block_t *) begin_address;
@@ -196,9 +196,14 @@ void memory_free(void *p)
 size_t memory_get_allocated_block_size(void *addr)
 {
 
-/* TODO: insert your code here */
+    size_t size;
+    mem_used_block_t *real_address;
 
-return 0;
+    real_address = (mem_used_block_t *) addr - 1;
+    size = real_address->size;
+
+    return size;
+
 }
 
 
