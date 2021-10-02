@@ -20,6 +20,8 @@ mem_free_block_t *first_free;
 
 
 #define ULONG(x)((long unsigned int)(x))
+#define FBLOCK_SIZE (sizeof(struct mem_free_block))
+#define ABLOCK_SIZE (sizeof(struct mem_used_block))
 
 #if defined(FIRST_FIT)
 
@@ -28,15 +30,45 @@ mem_free_block_t *first_free;
 
 void* mem_alloc_mod(size_t size){
     
-    mem_free_block_t *block = first_free;
+    mem_free_block_t *best_block, *last_block;
+    mem_used_block_t *assignblock;
+    best_block = first_free;
+    last_block = first_free;
 
-    while(block != NULL){
-        if(block->size >= size){
-            return block;
+
+    while(best_block != NULL){
+        if(best_block->size >= size){
+            assignblock = (mem_used_block_t *)best_block;
+            
+            size_t newsize = FBLOCK_SIZE + best_block->size - size - ABLOCK_SIZE;
+            if(newsize < FBLOCK_SIZE){
+                assignblock->size = best_block->size + newsize;
+                if(best_block == last_block){
+                    first_free = best_block->next;
+                }else{
+                    last_block->next = best_block->next;
+                }
+            }else {
+                assignblock->size = size;
+                best_block = (mem_free_block_t *) (assignblock + ABLOCK_SIZE+size);
+                best_block->size= newsize;
+                if(best_block == last_block){
+                    first_free = best_block;
+                }else{
+                    last_block->next = best_block;
+                }
+            }
+            return (void*) assignblock;
+
+            
+        }else{
+            last_block = best_block;
+            best_block = best_block->next;
         }
-        block = block->next;
-
     }
+    return NULL;
+    
+    
 }
 
 /* You can define here functions that will be compiled only if the
@@ -45,11 +77,34 @@ void* mem_alloc_mod(size_t size){
 
 
 #elif defined(BEST_FIT)
+    void* mem_alloc_mod(size_t size){
+        mem_free_block_t *block = first_free;
+        mem_free_block_t *best_fit = NULL;
+        size_t minsize =NULL;
+        while(block !=NULL){
+            if(block->size >= size+ABLOCK_SIZE-FBLOCK_SIZE){
+                if(minsize == NULL){
+                    minsize = block->size - size;
+                    best_fit = block;
+                }else{
+                    if(block->size - size < minsize){
+                        minsize = block->size - size;
+                        best_fit = block;
+                    }
+                }
+            }
+            block = block->next;
+        }
+        return best_fit;
+    }
+
 
 /* TODO: code specific to the BEST FIT allocation policy can be
  * inserted here */
 
 #elif defined(NEXT_FIT)
+
+
 
 /* TODO: code specific to the NEXT FIT allocation policy can be
  * inserted here */
@@ -72,6 +127,11 @@ void memory_init(void)
     /* register the function that will be called when the programs exits */
     atexit(run_at_exit);
 
+    heap_start = my_mmap(MEMORY_SIZE);
+    first_free = heap_start;
+    first_free->size = MEMORY_SIZE - sizeof(first_free->size);
+    first_free->next = NULL;
+
     /* TODO: insert your code here */
 
     /* TODO: start by using the provided my_mmap function to allocate
@@ -83,20 +143,78 @@ void *memory_alloc(size_t size)
 {
 
     /* TODO: insert your code here */
+    mem_used_block_t *allocated_block;
+
+    allocated_block = (mem_used_block_t *) mem_alloc_mod(size);
+    if (allocated_block == NULL) {
+        print_alloc_error(size);
+        exit(0);
+    }
+    allocated_block->size = size;
+    print_alloc_info( allocated_block + ABLOCK_SIZE, size);
+    return (void *) ((char *) allocated_block + ABLOCK_SIZE);
+
 
     /* TODO : don't forget to call the function print_alloc_info()
      * appropriately */
-    
-    return NULL;
 }
 
 void memory_free(void *p)
 {
 
     /* TODO: insert your code here */
+    mem_used_block_t *assignblock = p - ABLOCK_SIZE;
+    mem_free_block_t *f_block = first_free;
+    mem_free_block_t *l_block = first_free;
+
+    while((void*) f_block < (void*)assignblock){
+        l_block = f_block;
+        f_block = f_block->next;
+    }
+
+    if(l_block == f_block){
+        if((void*) l_block == (void*) assignblock+ABLOCK_SIZE+assignblock->size+1){
+            size_t nsize = assignblock->size+FBLOCK_SIZE+f_block->size;
+            f_block =(void *) assignblock;
+            f_block->size = nsize;
+
+            first_free = f_block;
+        }else{
+            mem_free_block_t* newFBlock = (void *)assignblock;
+            newFBlock->next = f_block;
+            first_free = newFBlock;
+             
+        }
+    }else{
+        if((void *) (l_block+FBLOCK_SIZE+l_block->size+1) == (void *)assignblock){
+            if((void *)assignblock+ABLOCK_SIZE+assignblock->size+1 == (void *)f_block){
+                l_block->size = l_block->size + ABLOCK_SIZE+assignblock->size+ FBLOCK_SIZE+ f_block->size;
+                l_block->next = f_block->next;
+            }else{
+               l_block->size = l_block->size + ABLOCK_SIZE+assignblock->size;
+               l_block->next = f_block;
+            }
+        }else{
+            if((void *)assignblock+ABLOCK_SIZE+assignblock->size+1 == (void *) (f_block)){
+                mem_free_block_t *newFBlock = (void *)assignblock;
+                newFBlock->size = ABLOCK_SIZE+assignblock->size+f_block->size;
+                newFBlock->next = f_block->next;
+                l_block->next = newFBlock;
+            }else{
+                mem_free_block_t *newFBlock = (void *)assignblock;
+                newFBlock->size = ABLOCK_SIZE+assignblock->size-FBLOCK_SIZE;
+                newFBlock->next = f_block;
+                l_block->next = newFBlock;
+            }
+             
+        }
+    }
+
+
 
     /* TODO : don't forget to call the function print_free_info()
      * appropriately */
+    print_free_info(p);
 
 }
 
@@ -104,8 +222,9 @@ size_t memory_get_allocated_block_size(void *addr)
 {
 
     /* TODO: insert your code here */
+    mem_used_block_t *assignblock = addr;
 
-    return 0;
+    return assignblock->size;
 }
 
 
