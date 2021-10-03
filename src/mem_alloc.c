@@ -217,7 +217,6 @@ size_t memory_get_allocated_block_size(void *addr)
 
 }
 
-
 void print_mem_state(void)
 {
 
@@ -231,8 +230,24 @@ void print_mem_state(void)
     while (current != NULL) {
         if (previous == NULL && (char *) current != (char *) heap_start) {
             for (address = (char *) heap_start; address < (char *) current; address++) {
-                fprintf(stderr, "X");
-                i++;
+                fprintf(stderr, "X"); i++;
+                if (i == segment) {
+                    fprintf(stderr, "\n");
+                    i = 0;
+                }
+            }
+        } else if (current == heap_start) {
+            previous = current;
+            for (address = (char *) current; address > (char *) previous + FB_SIZE + previous->size; address--) {
+                fprintf(stderr, "X"); i++;
+                if (i == segment) {
+                    fprintf(stderr, "\n");
+                    i = 0;
+                }
+            }
+        } else {
+            for (address = (char *) current; address > (char *) previous + FB_SIZE + previous->size; address--) {
+                fprintf(stderr, "X"); i++;
                 if (i == segment) {
                     fprintf(stderr, "\n");
                     i = 0;
@@ -240,28 +255,43 @@ void print_mem_state(void)
             }
         }
         for (address = (char *) current; address < (char *) current + FB_SIZE; address++) {
-            fprintf(stderr, "X");
-            i++;
+            fprintf(stderr, "H"); i++;
             if (i == segment) {
                 fprintf(stderr, "\n");
                 i = 0;
             }
         }
         for (address = (char *) current + FB_SIZE; address < (char *) current + FB_SIZE + current->size; address++) {
-            fprintf(stderr, ".");
-            i++;
+            fprintf(stderr, "."); i++;
             if (i == segment) {
                 fprintf(stderr, "\n");
                 i = 0;
             }
         }
+        previous = current;
         current = current->next;
     }
+    fprintf(stderr, "\n");
 
 
 }
 
+/*
+void print_mem_state()
+{
 
+    mem_free_block_t *current;
+
+    current = first_free;
+    while (current != NULL) {
+        fprintf(stderr, "%lu->|%lu|%lu|--->",
+            ULONG((char *) current - (char *) heap_start), current->size,
+            ULONG((char *) current->next - (char *) heap_start));
+        current = current->next;
+    }
+
+}
+*/
 void print_info(void)
 {
 
