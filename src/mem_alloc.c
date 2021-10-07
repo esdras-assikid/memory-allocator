@@ -72,7 +72,7 @@ void update_next_fit(){
                     minsize = block->size + FBLOCK_SIZE - ABLOCK_SIZE - size;
                     best_fit = block;
                 }else{
-                    if(block->size - size < minsize){
+                    if(block->size + FBLOCK_SIZE - ABLOCK_SIZE - size < minsize){
                         minsize = block->size + FBLOCK_SIZE - ABLOCK_SIZE - size;
                         best_fit = block;
                     }
@@ -363,10 +363,14 @@ void memory_free(void *p)
 size_t memory_get_allocated_block_size(void *addr)
 {
 
-    /* TODO: insert your code here */
-    mem_used_block_t *assignblock = addr;
+    size_t size;
+    mem_used_block_t *real_address;
 
-    return assignblock->size;
+    real_address = (mem_used_block_t *) addr - 1;
+    size = real_address->size;
+
+    return size;
+
 }
 
 
