@@ -50,6 +50,8 @@ void* mem_alloc_mod(size_t size){
 
 
 }
+void update_next_free(mem_free_block_t *new_block){
+}
 void update_next_fit(){
 
 }
@@ -79,6 +81,8 @@ void update_next_fit(){
             block = block->next;
         }
         return best_fit;
+    }
+    void update_next_free(mem_free_block_t *new_block){
     }
     void update_next_fit(){
 
@@ -119,12 +123,13 @@ void* mem_alloc_mod(size_t size){
             }
         }
         }
-        if(next_fit != NULL){
-            next_free = block;
-        }
+        
         return next_fit;
 }
 
+void update_next_free(mem_free_block_t *new_block){
+    next_free = new_block;
+}
 void update_next_fit(){
     mem_free_block_t *block = first_free;
     mem_free_block_t *last_block = first_free;
@@ -209,6 +214,7 @@ void *memory_alloc(size_t size)
                     }
                     last_block->next = allocated_block->next;
                 }
+                update_next_fit(allocated_block->next);
             }else {
                 assignblock->size = size;
                 mem_free_block_t *new_block;
@@ -223,6 +229,7 @@ void *memory_alloc(size_t size)
                     }
                     last_block->next = new_block;
                 }
+                update_next_fit(new_block);
             }
     print_alloc_info( (void *) ((char *) assignblock + ABLOCK_SIZE), assignblock->size);
     return (void *) ((char *) assignblock + ABLOCK_SIZE);
