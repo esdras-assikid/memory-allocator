@@ -67,13 +67,13 @@ void update_next_fit(){
         mem_free_block_t *best_fit = NULL;
         size_t minsize = 0;
         while(block !=NULL){
-            if(block->size >= size+ABLOCK_SIZE-FBLOCK_SIZE){
+            if(block->size + FBLOCK_SIZE - ABLOCK_SIZE >= size){
                 if(minsize == 0){
-                    minsize = block->size - size;
+                    minsize = block->size + FBLOCK_SIZE - ABLOCK_SIZE - size;
                     best_fit = block;
                 }else{
                     if(block->size - size < minsize){
-                        minsize = block->size - size;
+                        minsize = block->size + FBLOCK_SIZE - ABLOCK_SIZE - size;
                         best_fit = block;
                     }
                 }
@@ -123,7 +123,7 @@ void* mem_alloc_mod(size_t size){
             }
         }
         }
-        
+
         return next_fit;
 }
 
