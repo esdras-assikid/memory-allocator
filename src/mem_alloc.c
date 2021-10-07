@@ -169,7 +169,7 @@ void memory_init(void)
 
     heap_start = my_mmap(MEMORY_SIZE);
     first_free = heap_start;
-    first_free->size = MEMORY_SIZE - sizeof(first_free->size);
+    first_free->size = MEMORY_SIZE - FBLOCK_SIZE;
     first_free->next = NULL;
     next_free = first_free;
 
@@ -232,10 +232,73 @@ void *memory_alloc(size_t size)
      * appropriately */
 }
 
+// Given a freed block of memory and an already free block, which appears before
+// in the free list. This function links this previous block with the newly
+// freed one, and coalesces it if necessary.
+static void coalescing_previous(mem_free_block_t *freed, mem_free_block_t *prev)
+{
+
+    char *end_prev, *begin_freed;
+
+    if (prev != NULL)
+        end_prev = (char *) prev + (FBLOCK_SIZE + prev->size);
+    else
+        end_prev = (char *) first_free + (FBLOCK_SIZE + first_free->size);
+    begin_freed = (char *) freed;
+
+    if (prev == NULL) {
+        first_free = freed;
+    } else if (end_prev < begin_freed) {
+        prev->next = freed;
+    } else if (end_prev == begin_freed) {
+        prev->size += (FBLOCK_SIZE + freed->size);
+        prev->next = freed->next;
+        freed = NULL;
+    }
+
+}
+
 void memory_free(void *p)
 {
 
-    /* TODO: insert your code here */
+    size_t size;
+    char *begin_address, *end_address;
+    mem_free_block_t *freed_block, *current_free, *previous_free;
+
+    begin_address = (char *) p - ABLOCK_SIZE;
+    size = memory_get_allocated_block_size(p);
+    end_address = begin_address + ABLOCK_SIZE + size;
+
+    freed_block = (mem_free_block_t *) begin_address;
+    freed_block->size = (ABLOCK_SIZE + size) - FBLOCK_SIZE;
+
+    current_free = first_free;
+    previous_free = NULL;
+    while (current_free != NULL) {
+        if (end_address < (char *) current_free) {
+            freed_block->next = current_free;
+            coalescing_previous(freed_block, previous_free);
+            break;
+        } else if (end_address == (char *) current_free) {
+            freed_block->size += (FBLOCK_SIZE + current_free->size);
+            freed_block->next = current_free->next;
+            current_free = NULL;
+            coalescing_previous(freed_block, previous_free);
+            break;
+        }
+
+        previous_free = current_free;
+        current_free = current_free->next;
+    }
+    print_free_info(p);
+    update_next_fit();
+
+}
+
+/*
+void memory_free(void *p)
+{
+
     mem_used_block_t *assignblock = p - ABLOCK_SIZE;
     mem_free_block_t *f_block = first_free;
     mem_free_block_t *l_block = first_free;
@@ -285,11 +348,10 @@ void memory_free(void *p)
 
 
     update_next_fit();
-    /* TODO : don't forget to call the function print_free_info()
-     * appropriately */
     print_free_info(p);
 
 }
+*/
 
 size_t memory_get_allocated_block_size(void *addr)
 {
