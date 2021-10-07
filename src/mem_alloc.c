@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
+#include <limits.h>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -21,87 +22,84 @@ void *heap_start;
 // Pointer to the first free block in the heap.
 mem_free_block_t *first_free;
 
+// Pointer to the next free block in the heap.
+mem_free_block_t *next_free;
+
 /* -------------------------------------------------------------------------- */
 #if defined(FIRST_FIT)
 
-void *memory_alloc_policy(size_t size)
+void *memory_alloc_policy(size_t size, mem_free_block_t **previous_block)
 {
 
-    size_t remaining_space;
-    mem_free_block_t *previous, *current;
+    mem_free_block_t *current_block;
 
-    previous = NULL;
-    current = first_free;
-    while (current != NULL) {
-        if (current->size + AB_SIZE > size) {
-            // remaining space = "real" block size - allocated block size
-            remaining_space = (FB_SIZE + current->size) - (AB_SIZE + size);
+    current_block = first_free;
+    while (current_block != NULL) {
+        if (FB_SIZE + current_block->size >= AB_SIZE + size)
+            return (void *) current_block;
 
-            // If there is no place for a new free block, the function returns
-            // the complete current block, with the remaining space.
-            if (remaining_space < FB_SIZE) {
-                if (previous == NULL)
-                    first_free = current->next;
-                else {
-                    previous->next = current->next;
-                    current->next = NULL;
-                }
-                return (void *) current;
-            }
-
-            mem_free_block_t *new_free_block;
-            /*
-                The newly allocated block has the following structure,
-                [size; 0, 1, 2, ..., size -2, size - 1]
-                so the address of the new free block is located at address
-                sizeof(size) + size.
-            */
-            new_free_block =
-                (mem_free_block_t *) ((char *) current + (AB_SIZE + size));
-            new_free_block->size = remaining_space - FB_SIZE;
-            new_free_block->next = current->next;
-
-            if (previous == NULL)
-                first_free = new_free_block;
-            else {
-                previous->next = new_free_block;
-                current->next = NULL;
-            }
-            return (void *) current;
-        }
-
-        /*
-            This following of code is equivalent to the lines 42-50. This is
-            because if the function finds a free block with a size equal to the
-            size we want to allocate, the remaining space after that allocation
-            would be too small to create a new free block, hence the simalarity.
-        */
-        if (current->size == size) {
-            if (previous == NULL)
-                first_free = current->next;
-            else {
-                previous->next = current->next;
-                current->next = NULL;
-            }
-            return (void *) current;
-        }
-
-        previous = current;
-        current = current->next;
+        *previous_block = current_block;
+        current_block = current_block->next;
     }
+
     return NULL;
 
 }
 
 #elif defined(BEST_FIT)
 
-/* TODO: code specific to the BEST FIT allocation policy can be
-* inserted here */
+void *memory_alloc_policy(size_t size, mem_free_block_t **previous_block)
+{
+
+    mem_free_block_t *previous, *current_block, *best_block;
+    size_t min_size = ULONG_MAX, remaining_space;
+
+    previous = NULL;
+    best_block = NULL;
+    current_block = first_free;
+    while (current_block != NULL) {
+        if (FB_SIZE + current_block->size >= AB_SIZE + size) {
+            remaining_space =
+                (FB_SIZE + current_block->size) - (AB_SIZE + size);
+            if (remaining_space < min_size) {
+                *previous_block = previous; // Keeping the previous block before
+                best_block = current_block; // best_block.
+                min_size = remaining_space;
+            }
+        }
+
+        previous = current_block;
+        current_block = current_block->next;
+    }
+
+    return (void *) best_block;
+
+}
 
 #elif defined(NEXT_FIT)
 
-/* TODO: code specific to the NEXT FIT allocation policy can be
-* inserted here */
+void *memory_alloc_policy(size_t size, mem_free_block_t **previous_block)
+{
+
+    mem_free_block_t *current_block;
+
+    current_block = next_free;
+    do {
+        if (FB_SIZE + current_block->size >= AB_SIZE + size)
+            return (void *) current_block;
+
+        if (current_block->next == NULL) {
+            *previous_block = NULL;
+            current_block = first_free;
+        } else {
+            *previous_block = current_block;
+            current_block = current_block->next;
+        }
+    } while (current_block != next_free);
+
+    return NULL;
+
+}
 
 #endif
 /* -------------------------------------------------------------------------- */
@@ -118,10 +116,24 @@ void memory_init(void)
 {
 
     atexit(run_at_exit);
+
     heap_start = my_mmap(MEMORY_SIZE);
     first_free = (mem_free_block_t *) heap_start;
     first_free->size = MEMORY_SIZE - FB_SIZE;
     first_free->next = NULL;
+    next_free = first_free;
+
+    return;
+
+}
+
+void update_next_free(mem_free_block_t *new_next_free)
+{
+
+    if (new_next_free != NULL)
+        next_free = new_next_free;
+    else
+        next_free = first_free;
     return;
 
 }
@@ -129,14 +141,56 @@ void memory_init(void)
 void *memory_alloc(size_t size)
 {
 
+    mem_free_block_t *used_free_block, *previous_block;
     mem_used_block_t *allocated_block;
+    size_t remaining_space;
 
-    allocated_block = (mem_used_block_t *) memory_alloc_policy(size);
-    if (allocated_block == NULL) {
+    previous_block = NULL;
+    used_free_block =
+        (mem_free_block_t *) memory_alloc_policy(size, &previous_block);
+    if (used_free_block == NULL) {
         print_alloc_error(size);
         exit(0);
     }
-    allocated_block->size = size;
+    allocated_block = (mem_used_block_t *) used_free_block;
+
+    // remaining space = "real" block size - allocated block size
+    remaining_space = (FB_SIZE + used_free_block->size) - (AB_SIZE + size);
+    // If there is no place for a new free block, the function allocates
+    // the complete current block, with the remaining space.
+    if (remaining_space < FB_SIZE) {
+        allocated_block->size = size + remaining_space;
+        if (previous_block == NULL)
+            first_free = used_free_block->next;
+        else {
+            previous_block->next = used_free_block->next;
+            used_free_block->next = NULL;
+        }
+        update_next_free(used_free_block->next);
+    } else {
+        allocated_block->size = size;
+        mem_free_block_t *new_free_block;
+        /*
+            The newly allocated block has the following structure,
+            [size; 0, 1, 2, ..., size -2, size - 1]
+            so the address of the new free block is located at address
+            sizeof(size) + size.
+        */
+
+        new_free_block =
+            (mem_free_block_t *) ((char *) used_free_block + (AB_SIZE + size));
+        new_free_block->size = remaining_space - FB_SIZE;
+        new_free_block->next = used_free_block->next;
+
+        if (previous_block == NULL)
+            first_free = new_free_block;
+        else {
+            previous_block->next = new_free_block;
+            used_free_block->next = NULL;
+        }
+        update_next_free(new_free_block);
+    }
+
     print_alloc_info((char *) allocated_block + AB_SIZE, size);
     return (void *) ((char *) allocated_block + AB_SIZE);
 
@@ -163,6 +217,8 @@ static void coalescing_previous(mem_free_block_t *freed, mem_free_block_t *prev)
     } else if (end_prev == begin_freed) {
         prev->size += (FB_SIZE + freed->size);
         prev->next = freed->next;
+        if (freed == next_free)
+            update_next_free(prev);
         freed = NULL;
     }
 
@@ -175,15 +231,16 @@ void memory_free(void *p)
     char *begin_address, *end_address;
     mem_free_block_t *freed_block, *current_free, *previous_free;
 
-    begin_address = (char *) p - AB_SIZE;
     size = memory_get_allocated_block_size(p);
+    begin_address = (char *) p - AB_SIZE;
     end_address = begin_address + AB_SIZE + size;
 
     freed_block = (mem_free_block_t *) begin_address;
     freed_block->size = (AB_SIZE + size) - FB_SIZE;
+    freed_block->next = NULL;
 
-    current_free = first_free;
     previous_free = NULL;
+    current_free = first_free;
     while (current_free != NULL) {
         if (end_address < (char *) current_free) {
             freed_block->next = current_free;
@@ -193,6 +250,8 @@ void memory_free(void *p)
             freed_block->size += (FB_SIZE + current_free->size);
             freed_block->next = current_free->next;
             current_free = NULL;
+            if (end_address == (char *) next_free)
+                update_next_free(freed_block);
             coalescing_previous(freed_block, previous_free);
             break;
         }
@@ -200,6 +259,13 @@ void memory_free(void *p)
         previous_free = current_free;
         current_free = current_free->next;
     }
+
+    // first_free == NULL means the heap is full.
+    if (first_free == NULL) {
+        first_free = freed_block;
+        update_next_free(first_free);
+    }
+
     print_free_info(p);
 
 }
@@ -276,22 +342,6 @@ void print_mem_state(void)
 
 }
 
-/*
-void print_mem_state()
-{
-
-    mem_free_block_t *current;
-
-    current = first_free;
-    while (current != NULL) {
-        fprintf(stderr, "%lu->|%lu|%lu|--->",
-            ULONG((char *) current - (char *) heap_start), current->size,
-            ULONG((char *) current->next - (char *) heap_start));
-        current = current->next;
-    }
-
-}
-*/
 void print_info(void)
 {
 
