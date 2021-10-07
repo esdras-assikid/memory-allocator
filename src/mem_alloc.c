@@ -298,64 +298,6 @@ void memory_free(void *p)
 
 }
 
-/*
-void memory_free(void *p)
-{
-
-    mem_used_block_t *assignblock = p - ABLOCK_SIZE;
-    mem_free_block_t *f_block = first_free;
-    mem_free_block_t *l_block = first_free;
-
-    while((void*) f_block < (void*)assignblock){
-        l_block = f_block;
-        f_block = f_block->next;
-    }
-
-    if(l_block == f_block){
-        if((void*) l_block == (void*) assignblock+ABLOCK_SIZE+assignblock->size+1){
-            size_t nsize = assignblock->size+FBLOCK_SIZE+f_block->size;
-            f_block =(void *) assignblock;
-            f_block->size = nsize;
-
-            first_free = f_block;
-        }else{
-            mem_free_block_t* newFBlock = (void *)assignblock;
-            newFBlock->next = f_block;
-            first_free = newFBlock;
-
-        }
-    }else{
-        if((void *) (l_block+FBLOCK_SIZE+l_block->size+1) == (void *)assignblock){
-            if((void *)assignblock+ABLOCK_SIZE+assignblock->size+1 == (void *)f_block){
-                l_block->size = l_block->size + ABLOCK_SIZE+assignblock->size+ FBLOCK_SIZE+ f_block->size;
-                l_block->next = f_block->next;
-            }else{
-               l_block->size = l_block->size + ABLOCK_SIZE+assignblock->size;
-               l_block->next = f_block;
-            }
-        }else{
-            if((void *)assignblock+ABLOCK_SIZE+assignblock->size+1 == (void *) (f_block)){
-                mem_free_block_t *newFBlock = (void *)assignblock;
-                newFBlock->size = ABLOCK_SIZE+assignblock->size+f_block->size;
-                newFBlock->next = f_block->next;
-                l_block->next = newFBlock;
-            }else{
-                mem_free_block_t *newFBlock = (void *)assignblock;
-                newFBlock->size = ABLOCK_SIZE+assignblock->size-FBLOCK_SIZE;
-                newFBlock->next = f_block;
-                l_block->next = newFBlock;
-            }
-
-        }
-    }
-
-
-    update_next_fit();
-    print_free_info(p);
-
-}
-*/
-
 size_t memory_get_allocated_block_size(void *addr)
 {
 
@@ -368,7 +310,6 @@ size_t memory_get_allocated_block_size(void *addr)
     return size;
 
 }
-
 
 void print_mem_state(void)
 {
