@@ -17,7 +17,7 @@ void *heap_start;
 
 /* Pointer to the first free block in the heap */
 mem_free_block_t *first_free;
-mem_free_block_t *next_free; 
+mem_free_block_t *next_free;
 
 
 #define ULONG(x)((long unsigned int)(x))
@@ -30,7 +30,7 @@ mem_free_block_t *next_free;
  * inserted here */
 
 void* mem_alloc_mod(size_t size){
-    
+
     mem_free_block_t *best_block, *last_block;
     mem_used_block_t *assignblock;
     best_block = first_free;
@@ -40,18 +40,18 @@ void* mem_alloc_mod(size_t size){
     while(best_block != NULL){
         if(best_block->size >= size){
             return (void*) best_block;
-              
+
         }else{
             last_block = best_block;
             best_block = best_block->next;
         }
     }
     return NULL;
-    
-    
+
+
 }
 void update_next_fit(){
-        
+
 }
 
 /* You can define here functions that will be compiled only if the
@@ -63,10 +63,10 @@ void update_next_fit(){
     void* mem_alloc_mod(size_t size){
         mem_free_block_t *block = first_free;
         mem_free_block_t *best_fit = NULL;
-        size_t minsize =NULL;
+        size_t minsize = 0;
         while(block !=NULL){
             if(block->size >= size+ABLOCK_SIZE-FBLOCK_SIZE){
-                if(minsize == NULL){
+                if(minsize == 0){
                     minsize = block->size - size;
                     best_fit = block;
                 }else{
@@ -96,12 +96,13 @@ void* mem_alloc_mod(size_t size){
         while(c){
             if(block == NULL){
                 c = 0;
+            }else{
+                if(block->size >= size+ABLOCK_SIZE-FBLOCK_SIZE){
+                    next_fit = block;
+                    c = 0;
+                }
+                block = block->next;
             }
-            if(block->size >= size+ABLOCK_SIZE-FBLOCK_SIZE){
-                next_fit = block;
-                c = 0;
-            }
-            block = block->next;
         }
         if(next_fit == NULL){
             block = first_free;
@@ -109,12 +110,13 @@ void* mem_alloc_mod(size_t size){
             while(c){
             if(block == NULL){
                 c = 0;
+            } else {
+                if(block->size >= size+ABLOCK_SIZE-FBLOCK_SIZE){
+                    next_fit = block;
+                    c = 0;
+                }
+                block = block->next;
             }
-            if(block->size >= size+ABLOCK_SIZE-FBLOCK_SIZE){
-                next_fit = block;
-                c = 0;
-            }
-            block = block->next;
         }
         }
         if(next_fit != NULL){
@@ -153,7 +155,7 @@ void update_next_fit(){
 void run_at_exit(void)
 {
     fprintf(stderr,"YEAH B-)\n");
-    
+
     /* TODO: insert your code here */
 }
 
@@ -185,7 +187,7 @@ void *memory_alloc(size_t size)
     mem_free_block_t *allocated_block;
     mem_used_block_t *assignblock;
     mem_free_block_t *last_block;
-    
+
     last_block = first_free;
 
     allocated_block = (mem_free_block_t *) mem_alloc_mod(size);
@@ -198,7 +200,7 @@ void *memory_alloc(size_t size)
 
     size_t newsize = FBLOCK_SIZE + allocated_block->size - size - ABLOCK_SIZE;
             if(newsize < FBLOCK_SIZE){
-                assignblock->size = allocated_block->size + newsize;
+                assignblock->size = size + newsize;
                 if(allocated_block == last_block){
                     first_free = allocated_block->next;
                 }else{
@@ -210,7 +212,7 @@ void *memory_alloc(size_t size)
             }else {
                 assignblock->size = size;
                 mem_free_block_t *new_block;
-                new_block = (mem_free_block_t *) ((void *)assignblock + ABLOCK_SIZE+size+1);
+                new_block = (mem_free_block_t *) ((void *)assignblock + ABLOCK_SIZE+size);
                 new_block->size= newsize;
                 new_block->next = allocated_block->next;
                 if(allocated_block == last_block){
@@ -222,7 +224,7 @@ void *memory_alloc(size_t size)
                     last_block->next = new_block;
                 }
             }
-    print_alloc_info( assignblock + ABLOCK_SIZE, assignblock->size);
+    print_alloc_info( (void *) ((char *) assignblock + ABLOCK_SIZE), assignblock->size);
     return (void *) ((char *) assignblock + ABLOCK_SIZE);
 
 
@@ -254,7 +256,7 @@ void memory_free(void *p)
             mem_free_block_t* newFBlock = (void *)assignblock;
             newFBlock->next = f_block;
             first_free = newFBlock;
-             
+
         }
     }else{
         if((void *) (l_block+FBLOCK_SIZE+l_block->size+1) == (void *)assignblock){
@@ -277,7 +279,7 @@ void memory_free(void *p)
                 newFBlock->next = f_block;
                 l_block->next = newFBlock;
             }
-             
+
         }
     }
 
@@ -316,20 +318,20 @@ void print_free_info(void *addr){
     else{
         fprintf(stderr, "FREE  at : %lu \n", ULONG(0));
     }
-    
+
 }
 
 void print_alloc_info(void *addr, int size){
   if(addr){
-    fprintf(stderr, "ALLOC at : %lu (%d byte(s))\n", 
+    fprintf(stderr, "ALLOC at : %lu (%d byte(s))\n",
 	    ULONG((char*)addr - (char*)heap_start), size);
   }
   else{
-    fprintf(stderr, "Warning, system is out of memory\n"); 
+    fprintf(stderr, "Warning, system is out of memory\n");
   }
 }
 
-void print_alloc_error(int size) 
+void print_alloc_error(int size)
 {
     fprintf(stderr, "ALLOC error : can't allocate %d bytes\n", size);
 }
@@ -341,7 +343,7 @@ int main(int argc, char **argv){
   /* The main can be changed, it is *not* involved in tests */
   memory_init();
   print_info();
-  int i ; 
+  int i ;
   for( i = 0; i < 10; i++){
     char *b = memory_alloc(rand()%8);
     memory_free(b);
@@ -357,4 +359,4 @@ int main(int argc, char **argv){
   fprintf(stderr,"%lu\n",(long unsigned int) (memory_alloc(9)));
   return EXIT_SUCCESS;
 }
-#endif 
+#endif
