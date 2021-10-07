@@ -39,7 +39,7 @@ void* mem_alloc_mod(size_t size){
 
 
     while(best_block != NULL){
-        if(best_block->size >= size){
+        if(best_block->size + FBLOCK_SIZE - ABLOCK_SIZE>= size){
             return (void*) best_block;
 
         }else{
@@ -69,15 +69,10 @@ void update_next_fit(){
         size_t minsize = INT_MAX;
         while(block !=NULL){
             if(block->size + FBLOCK_SIZE - ABLOCK_SIZE >= size){
-/*                if(minsize == 0){
-                    minsize = block->size + FBLOCK_SIZE - ABLOCK_SIZE - size;
-                    best_fit = block;
-                }else{
-*/                    if(block->size + FBLOCK_SIZE - ABLOCK_SIZE - size < minsize){
+                    if(block->size + FBLOCK_SIZE - ABLOCK_SIZE - size < minsize){
                         minsize = block->size + FBLOCK_SIZE - ABLOCK_SIZE - size;
                         best_fit = block;
                     }
-//                }
             }
             block = block->next;
         }
@@ -215,7 +210,7 @@ void *memory_alloc(size_t size)
                     }
                     last_block->next = allocated_block->next;
                 }
-                update_next_fit(allocated_block->next);
+                update_next_free(allocated_block->next);
             }else {
                 assignblock->size = size;
                 mem_free_block_t *new_block;
@@ -230,7 +225,7 @@ void *memory_alloc(size_t size)
                     }
                     last_block->next = new_block;
                 }
-                update_next_fit(new_block);
+                update_next_free(new_block);
             }
     print_alloc_info( (void *) ((char *) assignblock + ABLOCK_SIZE), size);
     return (void *) ((char *) assignblock + ABLOCK_SIZE);
