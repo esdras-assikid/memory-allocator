@@ -16,7 +16,8 @@
 void *heap_start;
 
 /* Pointer to the first free block in the heap */
-mem_free_block_t *first_free; 
+mem_free_block_t *first_free;
+mem_free_block_t *next_free; 
 
 
 #define ULONG(x)((long unsigned int)(x))
@@ -38,29 +39,8 @@ void* mem_alloc_mod(size_t size){
 
     while(best_block != NULL){
         if(best_block->size >= size){
-            assignblock = (mem_used_block_t *)best_block;
-            
-            size_t newsize = FBLOCK_SIZE + best_block->size - size - ABLOCK_SIZE;
-            if(newsize < FBLOCK_SIZE){
-                assignblock->size = best_block->size + newsize;
-                if(best_block == last_block){
-                    first_free = best_block->next;
-                }else{
-                    last_block->next = best_block->next;
-                }
-            }else {
-                assignblock->size = size;
-                best_block = (mem_free_block_t *) (assignblock + ABLOCK_SIZE+size);
-                best_block->size= newsize;
-                if(best_block == last_block){
-                    first_free = best_block;
-                }else{
-                    last_block->next = best_block;
-                }
-            }
-            return (void*) assignblock;
-
-            
+            return (void*) best_block;
+              
         }else{
             last_block = best_block;
             best_block = best_block->next;
@@ -69,6 +49,9 @@ void* mem_alloc_mod(size_t size){
     return NULL;
     
     
+}
+void update_next_fit(){
+        
 }
 
 /* You can define here functions that will be compiled only if the
@@ -97,12 +80,67 @@ void* mem_alloc_mod(size_t size){
         }
         return best_fit;
     }
+    void update_next_fit(){
+
+    }
 
 
 /* TODO: code specific to the BEST FIT allocation policy can be
  * inserted here */
 
 #elif defined(NEXT_FIT)
+void* mem_alloc_mod(size_t size){
+        mem_free_block_t *block = next_free;
+        mem_free_block_t *next_fit = NULL;
+        int c = 1;
+        while(c){
+            if(block == NULL){
+                c = 0;
+            }
+            if(block->size >= size+ABLOCK_SIZE-FBLOCK_SIZE){
+                next_fit = block;
+                c = 0;
+            }
+            block = block->next;
+        }
+        if(next_fit == NULL){
+            block = first_free;
+            c= 1;
+            while(c){
+            if(block == NULL){
+                c = 0;
+            }
+            if(block->size >= size+ABLOCK_SIZE-FBLOCK_SIZE){
+                next_fit = block;
+                c = 0;
+            }
+            block = block->next;
+        }
+        }
+        if(next_fit != NULL){
+            next_free = block;
+        }
+        return next_fit;
+}
+
+void update_next_fit(){
+    mem_free_block_t *block = first_free;
+    mem_free_block_t *last_block = first_free;
+    mem_free_block_t *next_fit = next_free;
+
+    while(block !=NULL){
+        if(block == next_fit){
+            break;
+        }
+        else if(next_fit < block){
+            next_free = last_block;
+            break;
+        }
+        last_block = block;
+        block = block->next;
+    }
+    next_free = next_fit;
+}
 
 
 
@@ -131,6 +169,7 @@ void memory_init(void)
     first_free = heap_start;
     first_free->size = MEMORY_SIZE - sizeof(first_free->size);
     first_free->next = NULL;
+    next_free = first_free;
 
     /* TODO: insert your code here */
 
@@ -143,16 +182,48 @@ void *memory_alloc(size_t size)
 {
 
     /* TODO: insert your code here */
-    mem_used_block_t *allocated_block;
+    mem_free_block_t *allocated_block;
+    mem_used_block_t *assignblock;
+    mem_free_block_t *last_block;
+    
+    last_block = first_free;
 
-    allocated_block = (mem_used_block_t *) mem_alloc_mod(size);
+    allocated_block = (mem_free_block_t *) mem_alloc_mod(size);
     if (allocated_block == NULL) {
         print_alloc_error(size);
         exit(0);
     }
-    allocated_block->size = size;
-    print_alloc_info( allocated_block + ABLOCK_SIZE, size);
-    return (void *) ((char *) allocated_block + ABLOCK_SIZE);
+     assignblock = (mem_used_block_t *) allocated_block;
+
+
+    size_t newsize = FBLOCK_SIZE + allocated_block->size - size - ABLOCK_SIZE;
+            if(newsize < FBLOCK_SIZE){
+                assignblock->size = allocated_block->size + newsize;
+                if(allocated_block == last_block){
+                    first_free = allocated_block->next;
+                }else{
+                     while(last_block->next != allocated_block){
+                        last_block = last_block->next;
+                    }
+                    last_block->next = allocated_block->next;
+                }
+            }else {
+                assignblock->size = size;
+                mem_free_block_t *new_block;
+                new_block = (mem_free_block_t *) ((void *)assignblock + ABLOCK_SIZE+size+1);
+                new_block->size= newsize;
+                new_block->next = allocated_block->next;
+                if(allocated_block == last_block){
+                    first_free = new_block;
+                }else{
+                     while(last_block->next != allocated_block){
+                        last_block = last_block->next;
+                    }
+                    last_block->next = new_block;
+                }
+            }
+    print_alloc_info( assignblock + ABLOCK_SIZE, assignblock->size);
+    return (void *) ((char *) assignblock + ABLOCK_SIZE);
 
 
     /* TODO : don't forget to call the function print_alloc_info()
@@ -211,7 +282,7 @@ void memory_free(void *p)
     }
 
 
-
+    update_next_fit();
     /* TODO : don't forget to call the function print_free_info()
      * appropriately */
     print_free_info(p);
