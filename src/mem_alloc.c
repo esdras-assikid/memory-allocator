@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <limits.h>
 
 
 #include "mem_alloc_types.h"
@@ -65,18 +66,18 @@ void update_next_fit(){
     void* mem_alloc_mod(size_t size){
         mem_free_block_t *block = first_free;
         mem_free_block_t *best_fit = NULL;
-        size_t minsize = 0;
+        size_t minsize = INT_MAX;
         while(block !=NULL){
             if(block->size + FBLOCK_SIZE - ABLOCK_SIZE >= size){
-                if(minsize == 0){
+/*                if(minsize == 0){
                     minsize = block->size + FBLOCK_SIZE - ABLOCK_SIZE - size;
                     best_fit = block;
                 }else{
-                    if(block->size + FBLOCK_SIZE - ABLOCK_SIZE - size < minsize){
+*/                    if(block->size + FBLOCK_SIZE - ABLOCK_SIZE - size < minsize){
                         minsize = block->size + FBLOCK_SIZE - ABLOCK_SIZE - size;
                         best_fit = block;
                     }
-                }
+//                }
             }
             block = block->next;
         }
@@ -231,7 +232,7 @@ void *memory_alloc(size_t size)
                 }
                 update_next_fit(new_block);
             }
-    print_alloc_info( (void *) ((char *) assignblock + ABLOCK_SIZE), assignblock->size);
+    print_alloc_info( (void *) ((char *) assignblock + ABLOCK_SIZE), size);
     return (void *) ((char *) assignblock + ABLOCK_SIZE);
 
 
@@ -376,8 +377,63 @@ size_t memory_get_allocated_block_size(void *addr)
 
 void print_mem_state(void)
 {
-    /* TODO: insert your code here */
+
+    char *address;
+    int i = 0;
+    size_t segment = MEMORY_SIZE / 8;
+    mem_free_block_t *previous, *current;
+
+    previous = NULL;
+    current = first_free;
+    while (current != NULL) {
+        if (previous == NULL && (char *) current != (char *) heap_start) {
+            for (address = (char *) heap_start; address < (char *) current; address++) {
+                fprintf(stderr, "X"); i++;
+                if (i == segment) {
+                    fprintf(stderr, "\n");
+                    i = 0;
+                }
+            }
+        } else if (current == heap_start) {
+            previous = current;
+            for (address = (char *) current; address > (char *) previous + FBLOCK_SIZE + previous->size; address--) {
+                fprintf(stderr, "X"); i++;
+                if (i == segment) {
+                    fprintf(stderr, "\n");
+                    i = 0;
+                }
+            }
+        } else {
+            for (address = (char *) current; address > (char *) previous + FBLOCK_SIZE + previous->size; address--) {
+                fprintf(stderr, "X"); i++;
+                if (i == segment) {
+                    fprintf(stderr, "\n");
+                    i = 0;
+                }
+            }
+        }
+        for (address = (char *) current; address < (char *) current + FBLOCK_SIZE; address++) {
+            fprintf(stderr, "H"); i++;
+            if (i == segment) {
+                fprintf(stderr, "\n");
+                i = 0;
+            }
+        }
+        for (address = (char *) current + FBLOCK_SIZE; address < (char *) current + FBLOCK_SIZE + current->size; address++) {
+            fprintf(stderr, "."); i++;
+            if (i == segment) {
+                fprintf(stderr, "\n");
+                i = 0;
+            }
+        }
+        previous = current;
+        current = current->next;
+    }
+    fprintf(stderr, "\n");
+
+
 }
+
 
 
 void print_info(void) {
