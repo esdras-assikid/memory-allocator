@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
@@ -282,63 +283,73 @@ size_t memory_get_allocated_block_size(void *addr)
     return size;
 
 }
+/* -------------------------------------------------------------------------- */
+int line_len = 128, i = 0;
+
+static void print_mem_block(void *start, void *end, char c)
+{
+
+    char *address;
+    for (address = (char *) start; address < (char *) end; address++) {
+        fprintf(stderr, "%c", c); i++;
+        if (i == line_len) {
+            fprintf(stderr, "\n");
+            i = 0;
+        }
+    }
+
+}
+
+static void print_alloc_block(void *start, void *end)
+{
+
+    char *address;
+
+    address = (char *) start + AB_SIZE;
+    while (address - AB_SIZE != (char *) end) {
+        print_mem_block(address - AB_SIZE, address, 'A');
+        print_mem_block(address,
+            address + memory_get_allocated_block_size(address), 'X'
+        );
+        address += (AB_SIZE + memory_get_allocated_block_size(address));
+    }
+
+}
 
 void print_mem_state(void)
 {
 
     char *address;
-    int i = 0;
-    size_t segment = MEMORY_SIZE / 8;
-    mem_free_block_t *previous, *current;
+    mem_free_block_t *previous_block, *current_block;
 
-    previous = NULL;
-    current = first_free;
-    while (current != NULL) {
-        if (previous == NULL && (char *) current != (char *) heap_start) {
-            for (address = (char *) heap_start; address < (char *) current; address++) {
-                fprintf(stderr, "X"); i++;
-                if (i == segment) {
-                    fprintf(stderr, "\n");
-                    i = 0;
-                }
-            }
-        } else if (current == heap_start) {
-            previous = current;
-            for (address = (char *) current; address > (char *) previous + FB_SIZE + previous->size; address--) {
-                fprintf(stderr, "X"); i++;
-                if (i == segment) {
-                    fprintf(stderr, "\n");
-                    i = 0;
-                }
-            }
-        } else {
-            for (address = (char *) current; address > (char *) previous + FB_SIZE + previous->size; address--) {
-                fprintf(stderr, "X"); i++;
-                if (i == segment) {
-                    fprintf(stderr, "\n");
-                    i = 0;
-                }
-            }
+    previous_block = NULL;
+    current_block = first_free;
+    while (current_block != NULL) { // Traversing the free list
+        if (previous_block == NULL && // If the first free block isn't heapstart
+            (char *) current_block != (char *) heap_start)
+            print_alloc_block(heap_start, current_block);
+        else if (previous_block != NULL) {
+            // Prints allocated block beetween the previous free block and
+            // the currently traversed one.
+            address = (char *) previous_block + FB_SIZE + previous_block->size;
+            print_alloc_block(address, current_block);
         }
-        for (address = (char *) current; address < (char *) current + FB_SIZE; address++) {
-            fprintf(stderr, "H"); i++;
-            if (i == segment) {
-                fprintf(stderr, "\n");
-                i = 0;
-            }
-        }
-        for (address = (char *) current + FB_SIZE; address < (char *) current + FB_SIZE + current->size; address++) {
-            fprintf(stderr, "."); i++;
-            if (i == segment) {
-                fprintf(stderr, "\n");
-                i = 0;
-            }
-        }
-        previous = current;
-        current = current->next;
+        // Prints the currently traversed free block.
+        address = (char *) current_block + FB_SIZE;
+        print_mem_block(current_block, address, 'F');
+        print_mem_block(address, address + current_block->size, '.');
+
+        previous_block = current_block;
+        current_block = current_block->next;
     }
-    fprintf(stderr, "\n");
 
+    if (first_free == NULL) // If the heap is full.
+        print_alloc_block(heap_start, (char *) heap_start + MEMORY_SIZE);
+    else if (address + previous_block->size != // If the free list ends before
+        (char *) heap_start + MEMORY_SIZE) // the end of the heap
+        print_alloc_block(address + previous_block->size, (char *) heap_start + MEMORY_SIZE);
+
+    fprintf(stderr, "\n");
 
 }
 
