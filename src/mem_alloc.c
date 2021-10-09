@@ -347,12 +347,13 @@ void print_mem_state(void)
         print_alloc_block(heap_start, (char *) heap_start + MEMORY_SIZE);
     else if (address + previous_block->size != // If the free list ends before
         (char *) heap_start + MEMORY_SIZE) // the end of the heap
-        print_alloc_block(address + previous_block->size, (char *) heap_start + MEMORY_SIZE);
+        print_alloc_block(address + previous_block->size,
+            (char *) heap_start + MEMORY_SIZE);
 
     fprintf(stderr, "\n");
 
 }
-
+/* -------------------------------------------------------------------------- */
 void print_info(void)
 {
 
