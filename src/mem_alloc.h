@@ -8,6 +8,7 @@ void memory_init(void);
 void *memory_alloc(size_t size);
 void memory_free(void *p);
 size_t memory_get_allocated_block_size(void *addr);
+int is_alloc(void *addr);
 
 /* ------------------ Functions for testing and debugging ------------------- */
 // Display function
@@ -30,6 +31,8 @@ void print_alloc_info(void *addr, int size);
  * addr = address of the allocated block payload
  */
 void print_free_info(void *addr);
+
+void print_free_error(void *addr);
 
 /*
  * This trace function must be called upon a FAILED block allocation.

@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
@@ -16,6 +15,7 @@
 #define ULONG(x) ((long unsigned int)(x))
 #define FB_SIZE (sizeof(struct mem_free_block))
 #define AB_SIZE (sizeof(struct mem_used_block))
+#define MG_NUMB 123456789
 
 // Pointer to the beginning of the memory region to manage.
 void *heap_start;
@@ -26,7 +26,7 @@ mem_free_block_t *first_free;
 // Pointer to the next free block in the heap.
 mem_free_block_t *next_free;
 
-/* -------------------------------------------------------------------------- */
+/* ------------------- MEMORY ALLOCATION POLICIES - START ------------------- */
 #if defined(FIRST_FIT)
 
 void *memory_alloc_policy(size_t size, mem_free_block_t **previous_block)
@@ -103,8 +103,19 @@ void *memory_alloc_policy(size_t size, mem_free_block_t **previous_block)
 }
 
 #endif
-/* -------------------------------------------------------------------------- */
+void update_next_free(mem_free_block_t *new_next_free)
+{
 
+    if (new_next_free != NULL)
+        next_free = new_next_free;
+    else
+        next_free = first_free;
+    return;
+
+}
+/* -------------------- MEMORY ALLOCATION POLICIES - END -------------------- */
+
+/* ------------------------- INITIALIZATION - START ------------------------- */
 void run_at_exit(void) { mem_state(0); }
 
 void memory_init(void)
@@ -121,18 +132,9 @@ void memory_init(void)
     return;
 
 }
+/* -------------------------- INITIALIZATION - END -------------------------- */
 
-void update_next_free(mem_free_block_t *new_next_free)
-{
-
-    if (new_next_free != NULL)
-        next_free = new_next_free;
-    else
-        next_free = first_free;
-    return;
-
-}
-
+/* ----------------------- MEMORY ALLOCATION - START ------------------------ */
 void *memory_alloc(size_t size)
 {
 
@@ -154,7 +156,6 @@ void *memory_alloc(size_t size)
     // If there is no place for a new free block, the function allocates
     // the complete current block, with the remaining space.
     if (remaining_space < FB_SIZE) {
-        allocated_block->size = size + remaining_space;
         if (previous_block == NULL)
             first_free = used_free_block->next;
         else {
@@ -162,8 +163,9 @@ void *memory_alloc(size_t size)
             used_free_block->next = NULL;
         }
         update_next_free(used_free_block->next);
+        allocated_block->size = size + remaining_space;
+        allocated_block->magic_number = MG_NUMB;
     } else {
-        allocated_block->size = size;
         mem_free_block_t *new_free_block;
         /*
             The newly allocated block has the following structure,
@@ -184,13 +186,17 @@ void *memory_alloc(size_t size)
             used_free_block->next = NULL;
         }
         update_next_free(new_free_block);
+        allocated_block->size = size;
+        allocated_block->magic_number = MG_NUMB;
     }
 
     print_alloc_info((char *) allocated_block + AB_SIZE, size);
     return (void *) ((char *) allocated_block + AB_SIZE);
 
 }
+/* ------------------------- MEMORY ALLOCATION - END ------------------------ */
 
+/* ------------------------- MEMORY FREEING - START ------------------------- */
 // Given a freed block of memory and an already free block, which appears before
 // in the free list. This function links this previous block with the newly
 // freed one, and coalesces it if necessary.
@@ -222,49 +228,55 @@ static void coalescing_previous(mem_free_block_t *freed, mem_free_block_t *prev)
 void memory_free(void *p)
 {
 
-    size_t size;
-    char *begin_address, *end_address;
-    mem_free_block_t *freed_block, *current_free, *previous_free;
+    if (p != NULL && is_alloc(p)) {
+        size_t size;
+        char *begin_address, *end_address;
+        mem_free_block_t *freed_block, *current_free, *previous_free;
 
-    size = memory_get_allocated_block_size(p);
-    begin_address = (char *) p - AB_SIZE;
-    end_address = begin_address + AB_SIZE + size;
+        size = memory_get_allocated_block_size(p);
+        begin_address = (char *) p - AB_SIZE;
+        end_address = begin_address + AB_SIZE + size;
 
-    freed_block = (mem_free_block_t *) begin_address;
-    freed_block->size = (AB_SIZE + size) - FB_SIZE;
-    freed_block->next = NULL;
+        freed_block = (mem_free_block_t *) begin_address;
+        freed_block->size = (AB_SIZE + size) - FB_SIZE;
+        freed_block->next = NULL;
 
-    previous_free = NULL;
-    current_free = first_free;
-    while (current_free != NULL) {
-        if (end_address < (char *) current_free) {
-            freed_block->next = current_free;
-            coalescing_previous(freed_block, previous_free);
-            break;
-        } else if (end_address == (char *) current_free) {
-            freed_block->size += (FB_SIZE + current_free->size);
-            freed_block->next = current_free->next;
-            current_free = NULL;
-            if (end_address == (char *) next_free)
-                update_next_free(freed_block);
-            coalescing_previous(freed_block, previous_free);
-            break;
+        previous_free = NULL;
+        current_free = first_free;
+        while (current_free != NULL) {
+            if (end_address < (char *) current_free) {
+                freed_block->next = current_free;
+                coalescing_previous(freed_block, previous_free);
+                break;
+            } else if (end_address == (char *) current_free) {
+                freed_block->size += (FB_SIZE + current_free->size);
+                freed_block->next = current_free->next;
+                current_free = NULL;
+                if (end_address == (char *) next_free)
+                    update_next_free(freed_block);
+                coalescing_previous(freed_block, previous_free);
+                break;
+            }
+
+            previous_free = current_free;
+            current_free = current_free->next;
         }
 
-        previous_free = current_free;
-        current_free = current_free->next;
-    }
+        // first_free == NULL means the heap is full.
+        if (first_free == NULL) {
+            first_free = freed_block;
+            update_next_free(first_free);
+        }
 
-    // first_free == NULL means the heap is full.
-    if (first_free == NULL) {
-        first_free = freed_block;
-        update_next_free(first_free);
+        print_free_info(p);
+        return;
     }
-
-    print_free_info(p);
+    print_free_error(p);
 
 }
+/* -------------------------- MEMORY FREEING - END -------------------------- */
 
+/* ----------------------------- UTILS - START ------------------------------ */
 size_t memory_get_allocated_block_size(void *addr)
 {
 
@@ -277,7 +289,24 @@ size_t memory_get_allocated_block_size(void *addr)
     return size;
 
 }
-/* -------------------------------------------------------------------------- */
+
+int is_alloc(void *addr)
+{
+
+    if (addr != NULL) {
+        mem_used_block_t *real_address;
+
+        real_address = (mem_used_block_t *) addr - 1;
+        if (real_address->magic_number != MG_NUMB)
+            return 0;
+        return 1;
+    }
+    return 0;
+
+}
+/* ------------------------------ UTILS - END ------------------------------- */
+
+/* ------------------- MEMORY STATE VISUALIZATION - START ------------------- */
 // Used by the different printing functions in order to print 128 characters per
 // line. i is incremented each time a character is printed and reverted back to
 // zero once a line is completed.
@@ -316,7 +345,6 @@ static void print_alloc_block(void *start, void *end, int *ab_nb, int is_print)
 
 }
 
-
 /*
     is_print is a boolean used to specify if the functions involved in the
     checking of the memory state should print either a visual representation of
@@ -327,21 +355,25 @@ static void print_alloc_block(void *start, void *end, int *ab_nb, int is_print)
 void mem_state(int is_print)
 {
 
-    char *address;
+    char *address, *hp = (char *) heap_start;
     mem_free_block_t *previous_block, *current_block;
     int fb_nb = 0, ab_nb = 0; // free and allocated block number
 
     previous_block = NULL;
     current_block = first_free;
     while (current_block != NULL) { // Traversing the free list
-        if (previous_block == NULL && // If the first free block isn't heapstart
-            (char *) current_block != (char *) heap_start)
+        // If the first free block is not heap_start and the block is allocated.
+        if (previous_block == NULL &&
+            (char *) current_block != hp &&
+            is_alloc(hp + AB_SIZE)
+        )
             print_alloc_block(heap_start, current_block, &ab_nb, is_print);
         else if (previous_block != NULL) {
             // Prints allocated block beetween the previous free block and
             // the currently traversed one.
             address = (char *) previous_block + FB_SIZE + previous_block->size;
-            print_alloc_block(address, current_block, &ab_nb, is_print);
+            if (is_alloc(address + AB_SIZE))
+                print_alloc_block(address, current_block, &ab_nb, is_print);
         }
         // Prints the currently traversed free block.
         address = (char *) current_block + FB_SIZE;
@@ -355,13 +387,13 @@ void mem_state(int is_print)
         current_block = current_block->next;
     }
 
-    if (first_free == NULL) // If the heap is full.
-        print_alloc_block(heap_start, (char *) heap_start + MEMORY_SIZE,
+    if (first_free == NULL && is_alloc(hp + AB_SIZE)) // If the heap is full.
+        print_alloc_block(heap_start, hp + MEMORY_SIZE, &ab_nb, is_print);
+    else if (address + previous_block->size != hp + MEMORY_SIZE &&
+        is_alloc(address + previous_block->size + AB_SIZE)
+    ) // If the free list ends before the end of the heap.
+        print_alloc_block(address + previous_block->size, hp + MEMORY_SIZE,
             &ab_nb, is_print);
-    else if (address + previous_block->size != // If the free list ends before
-        (char *) heap_start + MEMORY_SIZE) // the end of the heap
-        print_alloc_block(address + previous_block->size,
-            (char *) heap_start + MEMORY_SIZE, &ab_nb, is_print);
 
     if (!is_print) {
         if (ab_nb != 0)
@@ -375,8 +407,8 @@ void mem_state(int is_print)
 }
 
 void print_mem_state(void) { mem_state(1); }
+/* -------------------- MEMORY STATE VISUALIZATION - END -------------------- */
 
-/* -------------------------------------------------------------------------- */
 void print_info(void)
 {
 
@@ -396,6 +428,17 @@ void print_free_info(void *addr)
 
 }
 
+void print_free_error(void *addr)
+{
+
+    if (addr == NULL)
+        fprintf(stderr, "WARNING: freeing %p is illegal.\n", addr);
+    else
+        fprintf(stderr, "WARNING: %lu is already free\n",
+            ULONG((char *) addr - (char *) heap_start));
+
+}
+
 void print_alloc_info(void *addr, int size)
 {
 
@@ -409,6 +452,7 @@ void print_alloc_info(void *addr, int size)
 
 void print_alloc_error(int size)
 { fprintf(stderr, "ALLOC error : can't allocate %d bytes\n", size); }
+
 
 #ifdef MAIN
 int main(int argc, char **argv) {
