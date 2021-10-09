@@ -105,13 +105,7 @@ void *memory_alloc_policy(size_t size, mem_free_block_t **previous_block)
 #endif
 /* -------------------------------------------------------------------------- */
 
-void run_at_exit(void)
-{
-
-    fprintf(stderr,"YEAH B-)\n");
-    /* TODO: insert your code here */
-
-}
+void run_at_exit(void) { mem_state(0); }
 
 void memory_init(void)
 {
@@ -284,7 +278,10 @@ size_t memory_get_allocated_block_size(void *addr)
 
 }
 /* -------------------------------------------------------------------------- */
-int line_len = 128, i = 0;
+// Used by the different printing functions in order to print 128 characters per
+// line. i is incremented each time a character is printed and reverted back to
+// zero once a line is completed.
+static int line_len = 128, i = 0;
 
 static void print_mem_block(void *start, void *end, char c)
 {
@@ -300,59 +297,85 @@ static void print_mem_block(void *start, void *end, char c)
 
 }
 
-static void print_alloc_block(void *start, void *end)
+static void print_alloc_block(void *start, void *end, int *ab_nb, int is_print)
 {
 
     char *address;
 
     address = (char *) start + AB_SIZE;
     while (address - AB_SIZE != (char *) end) {
-        print_mem_block(address - AB_SIZE, address, 'A');
-        print_mem_block(address,
-            address + memory_get_allocated_block_size(address), 'X'
-        );
+        if (is_print) {
+            print_mem_block(address - AB_SIZE, address, 'A');
+            print_mem_block(address,
+                address + memory_get_allocated_block_size(address), 'X'
+            );
+        }
         address += (AB_SIZE + memory_get_allocated_block_size(address));
+        *ab_nb += 1;
     }
 
 }
 
-void print_mem_state(void)
+
+/*
+    is_print is a boolean used to specify if the functions involved in the
+    checking of the memory state should print either a visual representation of
+    the memory or simply the number of allcoated and free blocks.
+    is_print == 0 -> simple displaying
+    is_print == 1 -> visual representation
+*/
+void mem_state(int is_print)
 {
 
     char *address;
     mem_free_block_t *previous_block, *current_block;
+    int fb_nb = 0, ab_nb = 0; // free and allocated block number
 
     previous_block = NULL;
     current_block = first_free;
     while (current_block != NULL) { // Traversing the free list
         if (previous_block == NULL && // If the first free block isn't heapstart
             (char *) current_block != (char *) heap_start)
-            print_alloc_block(heap_start, current_block);
+            print_alloc_block(heap_start, current_block, &ab_nb, is_print);
         else if (previous_block != NULL) {
             // Prints allocated block beetween the previous free block and
             // the currently traversed one.
             address = (char *) previous_block + FB_SIZE + previous_block->size;
-            print_alloc_block(address, current_block);
+            print_alloc_block(address, current_block, &ab_nb, is_print);
         }
         // Prints the currently traversed free block.
         address = (char *) current_block + FB_SIZE;
-        print_mem_block(current_block, address, 'F');
-        print_mem_block(address, address + current_block->size, '.');
+        if (is_print) {
+            print_mem_block(current_block, address, 'F');
+            print_mem_block(address, address + current_block->size, '.');
+        } else
+            fb_nb++;
 
         previous_block = current_block;
         current_block = current_block->next;
     }
 
     if (first_free == NULL) // If the heap is full.
-        print_alloc_block(heap_start, (char *) heap_start + MEMORY_SIZE);
+        print_alloc_block(heap_start, (char *) heap_start + MEMORY_SIZE,
+            &ab_nb, is_print);
     else if (address + previous_block->size != // If the free list ends before
         (char *) heap_start + MEMORY_SIZE) // the end of the heap
         print_alloc_block(address + previous_block->size,
-            (char *) heap_start + MEMORY_SIZE);
+            (char *) heap_start + MEMORY_SIZE, &ab_nb, is_print);
 
+    if (!is_print) {
+        if (ab_nb != 0)
+            fprintf(stderr, "WARNING: un-freed memory could lead to a memory "
+                "leak.\n");
+        fprintf(stderr, "%d un-freed allocated block(s) and %d free block(s).\n"
+            ,ab_nb, fb_nb);
+    }
     fprintf(stderr, "\n");
 
 }
+
+void print_mem_state(void) { mem_state(1); }
+
 /* -------------------------------------------------------------------------- */
 void print_info(void)
 {

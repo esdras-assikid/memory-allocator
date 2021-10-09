@@ -12,6 +12,7 @@ size_t memory_get_allocated_block_size(void *addr);
 /* ------------------ Functions for testing and debugging ------------------- */
 // Display function
 void print_mem_state(void);
+void mem_state(int is_print);
 
 // Function called upon process termination
 void run_at_exit(void);
