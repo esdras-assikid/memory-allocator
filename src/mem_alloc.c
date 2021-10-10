@@ -82,21 +82,23 @@ void *memory_alloc_policy(size_t size, mem_free_block_t **previous_block)
 void *memory_alloc_policy(size_t size, mem_free_block_t **previous_block)
 {
 
-    mem_free_block_t *current_block;
+    if (next_free != NULL || first_free != NULL) {
+        mem_free_block_t *current_block;
 
-    current_block = next_free;
-    do {
-        if (FB_SIZE + current_block->size >= AB_SIZE + size)
-            return (void *) current_block;
+        current_block = next_free;
+        do {
+            if (FB_SIZE + current_block->size >= AB_SIZE + size)
+                return (void *) current_block;
 
-        if (current_block->next == NULL) {
-            *previous_block = NULL;
-            current_block = first_free;
-        } else {
-            *previous_block = current_block;
-            current_block = current_block->next;
-        }
-    } while (current_block != next_free);
+            if (current_block->next == NULL) {
+                *previous_block = NULL;
+                current_block = first_free;
+            } else {
+                *previous_block = current_block;
+                current_block = current_block->next;
+            }
+        } while (current_block != next_free);
+    }
 
     return NULL;
 
@@ -399,8 +401,8 @@ void mem_state(int is_print)
         if (ab_nb != 0)
             fprintf(stderr, "WARNING: un-freed memory could lead to a memory "
                 "leak.\n");
-        fprintf(stderr, "%d un-freed allocated block(s) and %d free block(s).\n"
-            ,ab_nb, fb_nb);
+        fprintf(stderr, "%d allocated block(s) still in use and %d free "
+            "block(s).\n", ab_nb, fb_nb);
     }
     fprintf(stderr, "\n");
 
