@@ -34,7 +34,6 @@ mem_free_block_t *next_free;
 void* mem_alloc_mod(size_t size){
 
     mem_free_block_t *best_block, *last_block;
-    mem_used_block_t *assignblock;
     best_block = first_free;
     last_block = first_free;
 
@@ -45,7 +44,7 @@ void* mem_alloc_mod(size_t size){
                 return (char *) best_block;
             }else{
                 int mod = ULONG((char *)best_block + AB_SIZE) % MEM_ALIGNMENT;
-                if(mod+AB_SIZE+ size <= FB_SIZE+ best_block->size){
+                if(MEM_ALIGNMENT - mod+AB_SIZE+ size <= FB_SIZE+ best_block->size){
                     return (char  *) best_block;
                 }else{
                      last_block = best_block;
@@ -238,7 +237,7 @@ void *memory_alloc(size_t size)
 
     assignblock = (mem_used_block_t *) ((char *) allocated_block + MEM_ALIGNMENT - mod);
 
-    size_t newsize = FB_SIZE + allocated_block->size - size - AB_SIZE - mod;
+    size_t newsize = FB_SIZE + allocated_block->size - size - AB_SIZE - MEM_ALIGNMENT+ mod;
     if (newsize < FB_SIZE) {
         assignblock->size = size + newsize;
         if (allocated_block == last_block) {
@@ -253,7 +252,7 @@ void *memory_alloc(size_t size)
     } else {
         assignblock->size = size;
         mem_free_block_t *new_block;
-        new_block = (mem_free_block_t *) ((void *) assignblock + AB_SIZE + size + mod);
+        new_block = (mem_free_block_t *) ((void *) assignblock + AB_SIZE + size);
         new_block->size= newsize;
         new_block->next = allocated_block->next;
         if (allocated_block == last_block) {
