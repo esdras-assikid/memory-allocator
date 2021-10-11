@@ -22,8 +22,9 @@ mem_free_block_t *next_free;
 
 
 #define ULONG(x)((long unsigned int)(x))
-#define FBLOCK_SIZE (sizeof(struct mem_free_block))
-#define ABLOCK_SIZE (sizeof(struct mem_used_block))
+#define FB_SIZE (sizeof(struct mem_free_block))
+#define AB_SIZE (sizeof(struct mem_used_block))
+#define MG_NUMB 123456789
 
 #if defined(FIRST_FIT)
 
@@ -32,30 +33,24 @@ mem_free_block_t *next_free;
 
 void* mem_alloc_mod(size_t size){
 
-    mem_free_block_t *best_block, *last_block;
-    mem_used_block_t *assignblock;
+    mem_free_block_t *best_block;
     best_block = first_free;
-    last_block = first_free;
 
-
-    while(best_block != NULL){
-        if(best_block->size + FBLOCK_SIZE - ABLOCK_SIZE>= size){
-            if((void*) best_block + ABLOCK_SIZE % MEM_ALIGNMENT == 0){
+    while (best_block != NULL){
+        if (best_block->size + FB_SIZE >= size + AB_SIZE) {
+            if (ULONG((char *) best_block + AB_SIZE) % MEM_ALIGNMENT == 0)
                 return (void*) best_block;
-            }else{
-                int mod = ((void*)best_block + ABLOCK_SIZE) % MEM_ALIGNMENT;
-                if(mod+ABLOCK_SIZE+ size <= FBLOCK_SIZE+ best_block->size){
+            else {
+                unsigned long int mod = ULONG((char *) best_block + AB_SIZE) % MEM_ALIGNMENT;
+                if (mod + AB_SIZE + size <= FB_SIZE + best_block->size) {
                     return (void *) best_block;
-                }else{
-                     last_block = best_block;
-                     best_block = best_block->next;
+                } else {
+                    //*last_block = best_block;
+                    best_block = best_block->next;
                 }
             }
-            
-
-
-        }else{
-            last_block = best_block;
+        } else {
+            //*last_block = best_block;
             best_block = best_block->next;
         }
     }
@@ -80,19 +75,19 @@ void update_next_fit(){
         mem_free_block_t *best_fit = NULL;
         size_t minsize = INT_MAX;
         while(block !=NULL){
-            if(block->size + FBLOCK_SIZE - ABLOCK_SIZE >= size){
-                    if(block->size + FBLOCK_SIZE - ABLOCK_SIZE - size < minsize){
-                        if((void*) block + ABLOCK_SIZE % MEM_ALIGNMENT == 0){
-                            minsize = block->size + FBLOCK_SIZE - ABLOCK_SIZE - size;
+            if(block->size + FB_SIZE - AB_SIZE >= size){
+                    if(block->size + FB_SIZE - AB_SIZE - size < minsize){
+                        if (ULONG((char *) block + AB_SIZE) % MEM_ALIGNMENT == 0){
+                            minsize = block->size + FB_SIZE - AB_SIZE - size;
                             best_fit = block;
                         } else{
-                            int mod = ((void*)block + ABLOCK_SIZE) % MEM_ALIGNMENT;
-                            if(mod+ABLOCK_SIZE+ size <= FBLOCK_SIZE+ block->size){
-                                minsize = block->size + FBLOCK_SIZE - ABLOCK_SIZE - size;
+                            unsigned long int mod = ULONG((char *) block + AB_SIZE) % MEM_ALIGNMENT;
+                            if(mod+AB_SIZE+ size <= FB_SIZE+ block->size){
+                                minsize = block->size + FB_SIZE - AB_SIZE - size;
                                 best_fit = block;
                             }
                         }
-                    }      
+                    }
             }
             block = block->next;
         }
@@ -117,13 +112,13 @@ void* mem_alloc_mod(size_t size){
             if(block == NULL){
                 c = 0;
             }else{
-                if(block->size >= size+ABLOCK_SIZE-FBLOCK_SIZE){
-                    if((void*) block + ABLOCK_SIZE % MEM_ALIGNMENT == 0){
+                if(block->size >= size+AB_SIZE-FB_SIZE){
+                    if (ULONG((char *) block + AB_SIZE) % MEM_ALIGNMENT == 0){
                         next_fit = block;
                         c = 0;
                     }else{
-                        int mod = ((void*)block + ABLOCK_SIZE) % MEM_ALIGNMENT;
-                        if(mod+ABLOCK_SIZE+ size <= FBLOCK_SIZE+ block->size){
+                        unsigned long int mod = ULONG((char *) block + AB_SIZE) % MEM_ALIGNMENT;
+                        if(mod + AB_SIZE + size <= FB_SIZE + block->size){
                             next_fit = block;
                             c = 0;
                         }
@@ -139,13 +134,13 @@ void* mem_alloc_mod(size_t size){
             if(block == NULL){
                 c = 0;
             } else {
-                if(block->size >= size+ABLOCK_SIZE-FBLOCK_SIZE){
-                    if((void*) block + ABLOCK_SIZE % MEM_ALIGNMENT == 0){
+                if(block->size >= size+AB_SIZE-FB_SIZE){
+                    if(ULONG((char *) block + AB_SIZE) % MEM_ALIGNMENT == 0){
                         next_fit = block;
                         c = 0;
                     }else{
-                        int mod = ((void*)block + ABLOCK_SIZE) % MEM_ALIGNMENT;
-                        if(mod+ABLOCK_SIZE+ size <= FBLOCK_SIZE+ block->size){
+                        unsigned long int mod = ULONG((char *) block + AB_SIZE) % MEM_ALIGNMENT;
+                        if(mod+AB_SIZE+ size <= FB_SIZE+ block->size){
                             next_fit = block;
                             c = 0;
                         }
@@ -206,7 +201,7 @@ void memory_init(void)
 
     heap_start = my_mmap(MEMORY_SIZE);
     first_free = heap_start;
-    first_free->size = MEMORY_SIZE - FBLOCK_SIZE;
+    first_free->size = MEMORY_SIZE - FB_SIZE;
     first_free->next = NULL;
     next_free = first_free;
 
@@ -232,13 +227,13 @@ void *memory_alloc(size_t size)
         print_alloc_error(size);
         exit(0);
     }
-    size_t mod = (void*)allocated_block + ABLOCK_SIZE % MEM_ALIGNMENT;
+    size_t mod = ULONG((char *) allocated_block + AB_SIZE) % MEM_ALIGNMENT;
 
-     assignblock = (mem_used_block_t *) ((void *)allocated_block +mod);
+    assignblock = (mem_used_block_t *) ((void *)allocated_block + mod);
 
 
-    size_t newsize = FBLOCK_SIZE + allocated_block->size - size - ABLOCK_SIZE - mod;
-            if(newsize < FBLOCK_SIZE){
+    size_t newsize = FB_SIZE + allocated_block->size - size - AB_SIZE - mod;
+            if(newsize < FB_SIZE){
                 assignblock->size = size + newsize;
                 if(allocated_block == last_block){
                     first_free = allocated_block->next;
@@ -252,7 +247,7 @@ void *memory_alloc(size_t size)
             }else {
                 assignblock->size = size;
                 mem_free_block_t *new_block;
-                new_block = (mem_free_block_t *) ((void *)assignblock + ABLOCK_SIZE+size);
+                new_block = (mem_free_block_t *) ((void *)assignblock + AB_SIZE+size);
                 new_block->size= newsize;
                 new_block->next = allocated_block->next;
                 if(allocated_block == last_block){
@@ -265,8 +260,8 @@ void *memory_alloc(size_t size)
                 }
                 update_next_free(new_block);
             }
-    print_alloc_info( (void *) ((char *) assignblock + ABLOCK_SIZE), size);
-    return (void *) ((char *) assignblock + ABLOCK_SIZE);
+    print_alloc_info( (void *) ((char *) assignblock + AB_SIZE), size);
+    return (void *) ((char *) assignblock + AB_SIZE);
 
 
     /* TODO : don't forget to call the function print_alloc_info()
@@ -282,9 +277,9 @@ static void coalescing_previous(mem_free_block_t *freed, mem_free_block_t *prev)
     char *end_prev, *begin_freed;
 
     if (prev != NULL)
-        end_prev = (char *) prev + (FBLOCK_SIZE + prev->size);
+        end_prev = (char *) prev + (FB_SIZE + prev->size);/* TODO: DEFINE */
     else
-        end_prev = (char *) first_free + (FBLOCK_SIZE + first_free->size);
+        end_prev = (char *) first_free + (FB_SIZE + first_free->size);
     begin_freed = (char *) freed;
 
     if (prev == NULL) {
@@ -292,7 +287,7 @@ static void coalescing_previous(mem_free_block_t *freed, mem_free_block_t *prev)
     } else if (end_prev < begin_freed) {
         prev->next = freed;
     } else if (end_prev == begin_freed) {
-        prev->size += (FBLOCK_SIZE + freed->size);
+        prev->size += (FB_SIZE + freed->size);
         prev->next = freed->next;
         freed = NULL;
     }
@@ -306,12 +301,12 @@ void memory_free(void *p)
     char *begin_address, *end_address;
     mem_free_block_t *freed_block, *current_free, *previous_free;
 
-    begin_address = (char *) p - ABLOCK_SIZE;
+    begin_address = (char *) p - AB_SIZE;
     size = memory_get_allocated_block_size(p);
-    end_address = begin_address + ABLOCK_SIZE + size;
+    end_address = begin_address + AB_SIZE + size;
 
     freed_block = (mem_free_block_t *) begin_address;
-    freed_block->size = (ABLOCK_SIZE + size) - FBLOCK_SIZE;
+    freed_block->size = (AB_SIZE + size) - FB_SIZE;
 
     current_free = first_free;
     previous_free = NULL;
@@ -321,7 +316,7 @@ void memory_free(void *p)
             coalescing_previous(freed_block, previous_free);
             break;
         } else if (end_address == (char *) current_free) {
-            freed_block->size += (FBLOCK_SIZE + current_free->size);
+            freed_block->size += (FB_SIZE + current_free->size);
             freed_block->next = current_free->next;
             current_free = NULL;
             coalescing_previous(freed_block, previous_free);
@@ -335,7 +330,7 @@ void memory_free(void *p)
     update_next_fit();
 
 }
-
+/* ----------------------------- UTILS - START ------------------------------ */
 size_t memory_get_allocated_block_size(void *addr)
 {
 
@@ -349,65 +344,124 @@ size_t memory_get_allocated_block_size(void *addr)
 
 }
 
-void print_mem_state(void)
+int is_alloc(void *addr)
+{
+
+    if (addr != NULL) {
+        mem_used_block_t *real_address;
+
+        real_address = (mem_used_block_t *) addr - 1;
+        if (real_address->magic_number != MG_NUMB)
+            return 0;
+        return 1;
+    }
+    return 0;
+
+}
+/* ------------------------------ UTILS - END ------------------------------- */
+
+/* ------------------- MEMORY STATE VISUALIZATION - START ------------------- */
+// Used by the different printing functions in order to print 128 characters per
+// line. i is incremented each time a character is printed and reverted back to
+// zero once a line is completed.
+static int line_len = 128, i = 0;
+
+static void print_mem_block(void *start, void *end, char c)
 {
 
     char *address;
-    int i = 0;
-    size_t segment = MEMORY_SIZE / 8;
-    mem_free_block_t *previous, *current;
-
-    previous = NULL;
-    current = first_free;
-    while (current != NULL) {
-        if (previous == NULL && (char *) current != (char *) heap_start) {
-            for (address = (char *) heap_start; address < (char *) current; address++) {
-                fprintf(stderr, "X"); i++;
-                if (i == segment) {
-                    fprintf(stderr, "\n");
-                    i = 0;
-                }
-            }
-        } else if (current == heap_start) {
-            previous = current;
-            for (address = (char *) current; address > (char *) previous + FBLOCK_SIZE + previous->size; address--) {
-                fprintf(stderr, "X"); i++;
-                if (i == segment) {
-                    fprintf(stderr, "\n");
-                    i = 0;
-                }
-            }
-        } else {
-            for (address = (char *) current; address > (char *) previous + FBLOCK_SIZE + previous->size; address--) {
-                fprintf(stderr, "X"); i++;
-                if (i == segment) {
-                    fprintf(stderr, "\n");
-                    i = 0;
-                }
-            }
+    for (address = (char *) start; address < (char *) end; address++) {
+        fprintf(stderr, "%c", c); i++;
+        if (i == line_len) {
+            fprintf(stderr, "\n");
+            i = 0;
         }
-        for (address = (char *) current; address < (char *) current + FBLOCK_SIZE; address++) {
-            fprintf(stderr, "H"); i++;
-            if (i == segment) {
-                fprintf(stderr, "\n");
-                i = 0;
-            }
-        }
-        for (address = (char *) current + FBLOCK_SIZE; address < (char *) current + FBLOCK_SIZE + current->size; address++) {
-            fprintf(stderr, "."); i++;
-            if (i == segment) {
-                fprintf(stderr, "\n");
-                i = 0;
-            }
-        }
-        previous = current;
-        current = current->next;
     }
-    fprintf(stderr, "\n");
-
 
 }
 
+static void print_alloc_block(void *start, void *end, int *ab_nb, int is_print)
+{
+
+    char *address;
+
+    address = (char *) start + AB_SIZE;
+    while (address - AB_SIZE != (char *) end) {
+        if (is_print) {
+            print_mem_block(address - AB_SIZE, address, 'A');
+            print_mem_block(address,
+                address + memory_get_allocated_block_size(address), 'X'
+            );
+        }
+        address += (AB_SIZE + memory_get_allocated_block_size(address));
+        *ab_nb += 1;
+    }
+
+}
+
+/*
+    is_print is a boolean used to specify if the functions involved in the
+    checking of the memory state should print either a visual representation of
+    the memory or simply the number of allcoated and free blocks.
+    is_print == 0 -> simple displaying
+    is_print == 1 -> visual representation
+*/
+void mem_state(int is_print)
+{
+
+    char *address, *hp = (char *) heap_start;
+    mem_free_block_t *previous_block, *current_block;
+    int fb_nb = 0, ab_nb = 0; // free and allocated block number
+
+    previous_block = NULL;
+    current_block = first_free;
+    while (current_block != NULL) { // Traversing the free list
+        // If the first free block is not heap_start and the block is allocated.
+        if (previous_block == NULL &&
+            (char *) current_block != hp &&
+            is_alloc(hp + AB_SIZE)
+        )
+            print_alloc_block(heap_start, current_block, &ab_nb, is_print);
+        else if (previous_block != NULL) {
+            // Prints allocated block beetween the previous free block and
+            // the currently traversed one.
+            address = (char *) previous_block + FB_SIZE + previous_block->size;
+            if (is_alloc(address + AB_SIZE))
+                print_alloc_block(address, current_block, &ab_nb, is_print);
+        }
+        // Prints the currently traversed free block.
+        address = (char *) current_block + FB_SIZE;
+        if (is_print) {
+            print_mem_block(current_block, address, 'F');
+            print_mem_block(address, address + current_block->size, '.');
+        } else
+            fb_nb++;
+
+        previous_block = current_block;
+        current_block = current_block->next;
+    }
+
+    if (first_free == NULL && is_alloc(hp + AB_SIZE)) // If the heap is full.
+        print_alloc_block(heap_start, hp + MEMORY_SIZE, &ab_nb, is_print);
+    else if (address + previous_block->size != hp + MEMORY_SIZE &&
+        is_alloc(address + previous_block->size + AB_SIZE)
+    ) // If the free list ends before the end of the heap.
+        print_alloc_block(address + previous_block->size, hp + MEMORY_SIZE,
+            &ab_nb, is_print);
+
+    if (!is_print) {
+        if (ab_nb != 0)
+            fprintf(stderr, "WARNING: un-freed memory could lead to a memory "
+                "leak.\n");
+        fprintf(stderr, "%d allocated block(s) still in use and %d free "
+            "block(s).\n", ab_nb, fb_nb);
+    }
+    fprintf(stderr, "\n");
+
+}
+
+void print_mem_state(void) { mem_state(1); }
+/* -------------------- MEMORY STATE VISUALIZATION - END -------------------- */
 
 
 void print_info(void) {
