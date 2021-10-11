@@ -33,28 +33,35 @@ mem_free_block_t *next_free;
 
 void* mem_alloc_mod(size_t size){
 
-    mem_free_block_t *best_block;
+    mem_free_block_t *best_block, *last_block;
+    mem_used_block_t *assignblock;
     best_block = first_free;
+    last_block = first_free;
 
-    while (best_block != NULL){
-        if (best_block->size + FB_SIZE >= size + AB_SIZE) {
-            if (ULONG((char *) best_block + AB_SIZE) % MEM_ALIGNMENT == 0)
-                return (void*) best_block;
-            else {
-                unsigned long int mod = ULONG((char *) best_block + AB_SIZE) % MEM_ALIGNMENT;
-                if (mod + AB_SIZE + size <= FB_SIZE + best_block->size) {
-                    return (void *) best_block;
-                } else {
-                    //*last_block = best_block;
-                    best_block = best_block->next;
+
+    while(best_block != NULL){
+        if(best_block->size + FB_SIZE - AB_SIZE >= size){
+            if(ULONG((char *) best_block + AB_SIZE) % MEM_ALIGNMENT == 0){
+                return (char *) best_block;
+            }else{
+                int mod = ULONG((char *)best_block + AB_SIZE) % MEM_ALIGNMENT;
+                if(mod+AB_SIZE+ size <= FB_SIZE+ best_block->size){
+                    return (char  *) best_block;
+                }else{
+                     last_block = best_block;
+                     best_block = best_block->next;
                 }
             }
-        } else {
-            //*last_block = best_block;
+
+
+
+        }else{
+            last_block = best_block;
             best_block = best_block->next;
         }
     }
     return NULL;
+
 
 
 }
@@ -200,7 +207,7 @@ void memory_init(void)
     atexit(run_at_exit);
 
     heap_start = my_mmap(MEMORY_SIZE);
-    first_free = heap_start;
+    first_free = (mem_free_block_t *) heap_start;
     first_free->size = MEMORY_SIZE - FB_SIZE;
     first_free->next = NULL;
     next_free = first_free;
@@ -229,38 +236,37 @@ void *memory_alloc(size_t size)
     }
     size_t mod = ULONG((char *) allocated_block + AB_SIZE) % MEM_ALIGNMENT;
 
-    assignblock = (mem_used_block_t *) ((void *)allocated_block + mod);
-
+    assignblock = (mem_used_block_t *) ((char *) allocated_block + MEM_ALIGNMENT - mod);
 
     size_t newsize = FB_SIZE + allocated_block->size - size - AB_SIZE - mod;
-            if(newsize < FB_SIZE){
-                assignblock->size = size + newsize;
-                if(allocated_block == last_block){
-                    first_free = allocated_block->next;
-                }else{
-                     while(last_block->next != allocated_block){
-                        last_block = last_block->next;
-                    }
-                    last_block->next = allocated_block->next;
-                }
-                update_next_free(allocated_block->next);
-            }else {
-                assignblock->size = size;
-                mem_free_block_t *new_block;
-                new_block = (mem_free_block_t *) ((void *)assignblock + AB_SIZE+size);
-                new_block->size= newsize;
-                new_block->next = allocated_block->next;
-                if(allocated_block == last_block){
-                    first_free = new_block;
-                }else{
-                     while(last_block->next != allocated_block){
-                        last_block = last_block->next;
-                    }
-                    last_block->next = new_block;
-                }
-                update_next_free(new_block);
+    if (newsize < FB_SIZE) {
+        assignblock->size = size + newsize;
+        if (allocated_block == last_block) {
+            first_free = allocated_block->next;
+        } else {
+            while (last_block->next != allocated_block) {
+                last_block = last_block->next;
             }
-    print_alloc_info( (void *) ((char *) assignblock + AB_SIZE), size);
+            last_block->next = allocated_block->next;
+        }
+        update_next_free(allocated_block->next);
+    } else {
+        assignblock->size = size;
+        mem_free_block_t *new_block;
+        new_block = (mem_free_block_t *) ((void *) assignblock + AB_SIZE + size + mod);
+        new_block->size= newsize;
+        new_block->next = allocated_block->next;
+        if (allocated_block == last_block) {
+            first_free = new_block;
+        } else {
+            while (last_block->next != allocated_block) {
+                last_block = last_block->next;
+            }
+            last_block->next = new_block;
+        }
+        update_next_free(new_block);
+    }
+    print_alloc_info((void *) ((char *) assignblock + AB_SIZE), size);
     return (void *) ((char *) assignblock + AB_SIZE);
 
 
