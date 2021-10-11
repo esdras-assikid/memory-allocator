@@ -40,7 +40,19 @@ void* mem_alloc_mod(size_t size){
 
     while(best_block != NULL){
         if(best_block->size + FBLOCK_SIZE - ABLOCK_SIZE>= size){
-            return (void*) best_block;
+            if((void*) best_block + ABLOCK_SIZE % MEM_ALIGNMENT == 0){
+                return (void*) best_block;
+            }else{
+                int mod = ((void*)best_block + ABLOCK_SIZE) % MEM_ALIGNMENT;
+                if(mod+ABLOCK_SIZE+ size <= FBLOCK_SIZE+ best_block->size){
+                    return (void *) best_block;
+                }else{
+                     last_block = best_block;
+                     best_block = best_block->next;
+                }
+            }
+            
+
 
         }else{
             last_block = best_block;
@@ -70,9 +82,17 @@ void update_next_fit(){
         while(block !=NULL){
             if(block->size + FBLOCK_SIZE - ABLOCK_SIZE >= size){
                     if(block->size + FBLOCK_SIZE - ABLOCK_SIZE - size < minsize){
-                        minsize = block->size + FBLOCK_SIZE - ABLOCK_SIZE - size;
-                        best_fit = block;
-                    }
+                        if((void*) block + ABLOCK_SIZE % MEM_ALIGNMENT == 0){
+                            minsize = block->size + FBLOCK_SIZE - ABLOCK_SIZE - size;
+                            best_fit = block;
+                        } else{
+                            int mod = ((void*)block + ABLOCK_SIZE) % MEM_ALIGNMENT;
+                            if(mod+ABLOCK_SIZE+ size <= FBLOCK_SIZE+ block->size){
+                                minsize = block->size + FBLOCK_SIZE - ABLOCK_SIZE - size;
+                                best_fit = block;
+                            }
+                        }
+                    }      
             }
             block = block->next;
         }
@@ -98,8 +118,16 @@ void* mem_alloc_mod(size_t size){
                 c = 0;
             }else{
                 if(block->size >= size+ABLOCK_SIZE-FBLOCK_SIZE){
-                    next_fit = block;
-                    c = 0;
+                    if((void*) block + ABLOCK_SIZE % MEM_ALIGNMENT == 0){
+                        next_fit = block;
+                        c = 0;
+                    }else{
+                        int mod = ((void*)block + ABLOCK_SIZE) % MEM_ALIGNMENT;
+                        if(mod+ABLOCK_SIZE+ size <= FBLOCK_SIZE+ block->size){
+                            next_fit = block;
+                            c = 0;
+                        }
+                    }
                 }
                 block = block->next;
             }
@@ -112,8 +140,16 @@ void* mem_alloc_mod(size_t size){
                 c = 0;
             } else {
                 if(block->size >= size+ABLOCK_SIZE-FBLOCK_SIZE){
-                    next_fit = block;
-                    c = 0;
+                    if((void*) block + ABLOCK_SIZE % MEM_ALIGNMENT == 0){
+                        next_fit = block;
+                        c = 0;
+                    }else{
+                        int mod = ((void*)block + ABLOCK_SIZE) % MEM_ALIGNMENT;
+                        if(mod+ABLOCK_SIZE+ size <= FBLOCK_SIZE+ block->size){
+                            next_fit = block;
+                            c = 0;
+                        }
+                    }
                 }
                 block = block->next;
             }
@@ -196,10 +232,12 @@ void *memory_alloc(size_t size)
         print_alloc_error(size);
         exit(0);
     }
-     assignblock = (mem_used_block_t *) allocated_block;
+    size_t mod = (void*)allocated_block + ABLOCK_SIZE % MEM_ALIGNMENT;
+
+     assignblock = (mem_used_block_t *) ((void *)allocated_block +mod);
 
 
-    size_t newsize = FBLOCK_SIZE + allocated_block->size - size - ABLOCK_SIZE;
+    size_t newsize = FBLOCK_SIZE + allocated_block->size - size - ABLOCK_SIZE - mod;
             if(newsize < FBLOCK_SIZE){
                 assignblock->size = size + newsize;
                 if(allocated_block == last_block){
